@@ -66,7 +66,7 @@ pub struct Divergences {
 }
 
 impl CorpusStats {
-    pub fn new(arch: String, data: &Vec<u8>, base_count: f32) -> Self {
+    pub fn new(arch: String, data: &[u8], base_count: f32) -> Self {
         let mut bg: HashMap<(u8, u8), f32> = HashMap::new();
         let mut tg = HashMap::new();
 

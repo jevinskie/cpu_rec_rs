@@ -102,7 +102,7 @@ fn predict(corpus_stats: &Vec<CorpusStats>, target: &CorpusStats) -> Result<Opti
 */
 fn guess_with_windows(
     corpus_stats: &Vec<CorpusStats>,
-    file_data: &Vec<u8>,
+    file_data: &[u8],
     filename: &str,
 ) -> Result<Vec<DetectionResult>, Error> {
     let mut res = Vec::<DetectionResult>::new();
@@ -152,7 +152,7 @@ fn guess_with_windows(
 
             debug!("{}: range 0x{:x}-0x{:x}", filename, start, end);
             let win_stats =
-                CorpusStats::new("target".to_string(), &file_data[start..end].to_vec(), 0.0);
+                CorpusStats::new("target".to_string(), &file_data[start..end], 0.0);
             let win_res = predict(corpus_stats, &win_stats)?;
 
             // Should we add the previous guess to the result ?  yes if it's
@@ -238,10 +238,6 @@ fn main() -> Result<()> {
             // deserialize
             postcard::from_bytes(&bytes_vec).unwrap()
         },
-        // Some(corpus_dir) => {
-        //     bail!("fart");
-        // }
-        // attempt to load the given corpus folder
         Some(corpus_dir) => {
             if *corpus_dir == "executable-relative" {
                 let exe_path = std::env::current_exe().with_context(|| "Could not get exe filename")?;
@@ -261,13 +257,11 @@ fn main() -> Result<()> {
                 let corpus_files = format!("{real_corpus_dir}/*.corpus");
                 println!("Loading corpus from CWD relative path {}", corpus_files);
                 load_corpus(&corpus_files)?;
-            } else {
-                if !Path::new(corpus_dir).is_dir() {
-                    return Err(Error::msg(format!(
-                        "{} is not a valid directory",
-                        corpus_dir
-                    )));
-                }
+            } else if !Path::new(corpus_dir).is_dir() {
+                return Err(Error::msg(format!(
+                    "{} is not a valid directory",
+                    corpus_dir
+                )));
             }
                 let corpus_files = format!("{corpus_dir}/*.corpus");
                 println!("Loading corpus from {}", corpus_files);
