@@ -15,13 +15,14 @@
 */
 mod corpus;
 use crate::corpus::{load_corpus, CorpusStats};
-use anyhow::{bail, Context, Error, Result};
+use anyhow::{Context, Error, Result};
 use clap::{arg, Arg, ArgAction};
 use log::{debug, info};
 use std::cmp::min;
 use std::path::Path;
 use std::str::FromStr;
 use std::string::String;
+use std::io::Read;
 
 #[derive(Clone)]
 struct DetectionResult {
@@ -223,40 +224,56 @@ fn main() -> Result<()> {
     };
     simple_logger::init_with_level(level)?;
 
-    let corpus_dir_res = args.get_one::<String>("corpus");
+    let corpus_stats: Vec<CorpusStats> = match args.get_one::<&str>("corpus") {
+        // if no arg given, use embedded corpus
+        None => {
+            // serialized bytes embedded from build.rs
+            let comp_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/default.pc"));
+    
+            // decompress
+            let mut decompressed_input = lz4_flex::frame::FrameDecoder::new(&comp_bytes[..]);
+            let mut bytes_vec = Vec::<u8>::new();
+            let _decomp_sz = decompressed_input.read_to_end(bytes_vec.as_mut()).unwrap();
 
-    /* Use the given path to load the corpus from, else try
-     * to find it in the current directory or in the exec
-     * folder */
-    let corpus_dir = match corpus_dir_res {
-        Some(c) => c.to_owned(),
-        None => if Path::new("cpu_rec_corpus").is_dir() {
-            "cpu_rec_corpus".to_string()
-        } else {
-            let exe_path = std::env::current_exe().with_context(|| "Could not get exe filename")?;
-            let parent_path = exe_path.parent().unwrap();
-            if parent_path.join("cpu_rec_corpus").is_dir() {
-                // Found it in the exe path
-                parent_path
-                    .join("cpu_rec_corpus")
-                    .to_str()
-                    .unwrap()
-                    .to_string()
+            // deserialize
+            postcard::from_bytes(&bytes_vec).unwrap()
+        },
+        // Some(corpus_dir) => {
+        //     bail!("fart");
+        // }
+        // attempt to load the given corpus folder
+        Some(corpus_dir) => {
+            if *corpus_dir == "executable-relative" {
+                let exe_path = std::env::current_exe().with_context(|| "Could not get exe filename")?;
+                let parent_path = exe_path.parent().unwrap();
+                if parent_path.join("cpu_rec_corpus").is_dir() {
+                    // Found it in the exe path
+                    let real_corpus_dir: String = parent_path.join("cpu_rec_corpus").to_str().unwrap().to_string();
+                    let corpus_files = format!("{real_corpus_dir}/*.corpus");
+                    println!("Loading corpus from executable relative path {}", corpus_files);
+                    load_corpus(&corpus_files)?;
+                } else {
+                    return Err(Error::msg("Could not find \"cpu_rec_corpus\" relative to executable, please specify it using --corpus"));
+                }
+            } else if Path::new("cpu_rec_corpus").is_dir() {
+                // Found it relative to CWD
+                let real_corpus_dir: String = Path::new("cpu_rec_corpus").to_str().unwrap().to_string();
+                let corpus_files = format!("{real_corpus_dir}/*.corpus");
+                println!("Loading corpus from CWD relative path {}", corpus_files);
+                load_corpus(&corpus_files)?;
             } else {
-                bail!("Could not find \"cpu_rec_corpus\", please specify it using --corpus");
+                if !Path::new(corpus_dir).is_dir() {
+                    return Err(Error::msg(format!(
+                        "{} is not a valid directory",
+                        corpus_dir
+                    )));
+                }
             }
-        }
-        .to_owned(),
-    };
-
-    if !Path::new(&corpus_dir).is_dir() {
-        bail!("{} is not a valid directory", corpus_dir);
-    }
-
-    let corpus_files = Path::new(&corpus_dir).join("*.corpus");
-    println!("Loading corpus from {:?}", corpus_files);
-
-    let corpus_stats = load_corpus(&corpus_files.to_str().unwrap())?;
+                let corpus_files = format!("{corpus_dir}/*.corpus");
+                println!("Loading corpus from {}", corpus_files);
+                load_corpus(&corpus_files)?
+            }
+        };
 
     info!("Corpus size: {}", corpus_stats.len());
 
