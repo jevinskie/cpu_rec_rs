@@ -13,7 +13,8 @@ fn main() {
     // serialize to bytes
     let bytes = postcard::to_stdvec(&default).unwrap();
     // generate file path
-    let compressed_file_pathbuf = std::path::Path::new(std::env::var("OUT_DIR").unwrap().as_str()).join("default.pc");
+    let compressed_file_pathbuf =
+        std::path::Path::new(std::env::var("OUT_DIR").unwrap().as_str()).join("default.pc");
     let compressed_file_path = compressed_file_pathbuf.as_path();
 
     // open file

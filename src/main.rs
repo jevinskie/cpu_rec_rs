@@ -19,10 +19,10 @@ use anyhow::{Context, Error, Result};
 use clap::{arg, Arg, ArgAction};
 use log::{debug, info};
 use std::cmp::min;
+use std::io::Read;
 use std::path::Path;
 use std::str::FromStr;
 use std::string::String;
-use std::io::Read;
 
 #[derive(Clone)]
 struct DetectionResult {
@@ -151,8 +151,7 @@ fn guess_with_windows(
             let end = min(file_data.len(), start + window * 2);
 
             debug!("{}: range 0x{:x}-0x{:x}", filename, start, end);
-            let win_stats =
-                CorpusStats::new("target".to_string(), &file_data[start..end], 0.0);
+            let win_stats = CorpusStats::new("target".to_string(), &file_data[start..end], 0.0);
             let win_res = predict(corpus_stats, &win_stats)?;
 
             // Should we add the previous guess to the result ?  yes if it's
@@ -229,7 +228,7 @@ fn main() -> Result<()> {
         None => {
             // serialized bytes embedded from build.rs
             let comp_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/default.pc"));
-    
+
             // decompress
             let mut decompressed_input = lz4_flex::frame::FrameDecoder::new(&comp_bytes[..]);
             let mut bytes_vec = Vec::<u8>::new();
@@ -237,23 +236,32 @@ fn main() -> Result<()> {
 
             // deserialize
             postcard::from_bytes(&bytes_vec).unwrap()
-        },
+        }
         Some(corpus_dir) => {
             if *corpus_dir == "executable-relative" {
-                let exe_path = std::env::current_exe().with_context(|| "Could not get exe filename")?;
+                let exe_path =
+                    std::env::current_exe().with_context(|| "Could not get exe filename")?;
                 let parent_path = exe_path.parent().unwrap();
                 if parent_path.join("cpu_rec_corpus").is_dir() {
                     // Found it in the exe path
-                    let real_corpus_dir: String = parent_path.join("cpu_rec_corpus").to_str().unwrap().to_string();
+                    let real_corpus_dir: String = parent_path
+                        .join("cpu_rec_corpus")
+                        .to_str()
+                        .unwrap()
+                        .to_string();
                     let corpus_files = format!("{real_corpus_dir}/*.corpus");
-                    println!("Loading corpus from executable relative path {}", corpus_files);
+                    println!(
+                        "Loading corpus from executable relative path {}",
+                        corpus_files
+                    );
                     load_corpus(&corpus_files)?;
                 } else {
                     return Err(Error::msg("Could not find \"cpu_rec_corpus\" relative to executable, please specify it using --corpus"));
                 }
             } else if Path::new("cpu_rec_corpus").is_dir() {
                 // Found it relative to CWD
-                let real_corpus_dir: String = Path::new("cpu_rec_corpus").to_str().unwrap().to_string();
+                let real_corpus_dir: String =
+                    Path::new("cpu_rec_corpus").to_str().unwrap().to_string();
                 let corpus_files = format!("{real_corpus_dir}/*.corpus");
                 println!("Loading corpus from CWD relative path {}", corpus_files);
                 load_corpus(&corpus_files)?;
@@ -263,11 +271,11 @@ fn main() -> Result<()> {
                     corpus_dir
                 )));
             }
-                let corpus_files = format!("{corpus_dir}/*.corpus");
-                println!("Loading corpus from {}", corpus_files);
-                load_corpus(&corpus_files)?
-            }
-        };
+            let corpus_files = format!("{corpus_dir}/*.corpus");
+            println!("Loading corpus from {}", corpus_files);
+            load_corpus(&corpus_files)?
+        }
+    };
 
     info!("Corpus size: {}", corpus_stats.len());
 
